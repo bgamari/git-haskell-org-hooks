@@ -17,6 +17,7 @@ import           Shelly
 import           System.Environment
 
 import           Git
+import           Common
 
 main :: IO ()
 main = do

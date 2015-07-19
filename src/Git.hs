@@ -166,7 +166,3 @@ cvtMode "100755" = GitTypeExeFile
 cvtMode "120000" = GitTypeSymLink
 cvtMode "160000" = GitTypeGitLink
 cvtMode x = error ("cvtMode: " ++ show x)
-
-
-tshow :: Show a => a -> Text
-tshow = T.pack . show
