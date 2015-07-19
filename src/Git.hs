@@ -19,6 +19,7 @@ import           Prelude hiding (FilePath)
 import           Shelly
 
 type GitRef = Text
+type CommitId = Text
 
 -- | Run @git@ operation
 runGit :: FilePath -> Text -> [Text] -> Sh Text
@@ -59,7 +60,7 @@ gitCatBlob d ref = do
 -- | Wrapper around @git rev-parse --verify@
 --
 -- Normalise git ref to commit sha1
-gitNormCid :: FilePath -> GitRef -> Sh GitRef
+gitNormCid :: FilePath -> GitRef -> Sh CommitId
 gitNormCid d ref = do
     tmp <- runGit d "rev-parse" ["-q", "--verify", ref <> "^{commit}" ]
     return (T.strip tmp)
@@ -104,23 +105,44 @@ getModules d ref = do
 
     return $!! ms'
 
+-- | The state of a file in the parent of a git commit and the changes
+-- thereof.
+data CommitParent
+    = CommitParent { srcFileType :: !GitType
+                   , changeType  :: !ChangeType
+                   , srcHash     :: !Text
+                   }
+    deriving (Show)
 
-{- |
+instance NFData CommitParent where rnf !_ = ()
 
-Possible meanings of the 'Char' value:
+-- | The changes to a file in a git commit
+data ChangedFile = ChangedFile { parents    :: [CommitParent]
+                               , dstType    :: !GitType
+                               , dstHash    :: !Text
+                               , dstPath    :: !Text
+                               }
+                   deriving (Show)
 
- * Added (A),
- * Copied (C),
- * Deleted (D),
- * Modified (M),
- * Renamed (R),
- * have their type (i.e. regular file, symlink, submodule, ...) changed (T),
- * are Unmerged (U),
- * are Unknown (X),
- * or have had their pairing Broken (B).
+instance NFData ChangedFile where
+    rnf !a = rnf (parents a) `seq` ()
 
--}
-gitDiffTree :: FilePath -> GitRef -> Sh (Text, [([(GitType, Text, Char)], (GitType, Text), Text)])
+data ChangeType
+    = FileAdded
+    | FileCopied
+    | FileDeleted
+    | FileModified
+    | FileRenamed
+    | FileTypeChanged
+    -- ^ e.g. changed between regular file, symlink, submodule, ...
+    | FileUnmerged
+    | FileUnknown
+    | FilePairingBroken
+    deriving (Show)
+
+instance NFData ChangeType where rnf !_ = ()
+
+gitDiffTree :: FilePath -> GitRef -> Sh (CommitId, [ChangedFile])
 gitDiffTree d ref = do
     tmp <- liftM T.lines $ runGit d "diff-tree" ["--root","-c", "-r", ref]
     case tmp of
@@ -128,18 +150,35 @@ gitDiffTree d ref = do
         []         -> return ("", [])
 
   where
-    parseDtLine :: Text -> ([(GitType, Text, Char)], (GitType, Text), Text)
-    parseDtLine l
-      | sanityCheck = force (zip3 (map cvtMode mode') oid' (T.unpack k),(cvtMode mode,oid),fp)
-      | otherwise = error "in parseDtLine"
-      where
-        sanityCheck = n > 0 && T.length k == n
+    parseStatus :: Char -> ChangeType
+    parseStatus c =
+      case c of
+        'A' -> FileAdded
+        'C' -> FileCopied
+        'D' -> FileDeleted
+        'M' -> FileModified
+        'R' -> FileRenamed
+        'T' -> FileTypeChanged
+        'U' -> FileUnmerged
+        'X' -> FileUnknown
+        'B' -> FilePairingBroken
+        _   -> error $ "parseDtLine: unknown file status "++[c]
 
-        n = T.length cols
-        (mode',mode:tmp') = splitAt n $ T.split (==' ') l''
-        (oid',[oid,k]) = splitAt n tmp'
-        [l'',fp] = T.split (=='\t') l'
-        (cols,l') = T.span (==':') l
+    parseDtLine :: Text -> ChangedFile
+    parseDtLine l
+      = ChangedFile { parents = _parents
+                    , dstType = cvtMode _dstMode
+                    , dstHash = _dstHash
+                    , dstPath = _dstPath
+                    }
+      where
+        (modes, _dstMode:rest) = splitAt nParents $ T.split (==' ') l''
+        (hashes, [_dstHash, _status]) = splitAt nParents rest
+        _parents = zipWith3 CommitParent (map cvtMode modes) (map parseStatus $ T.unpack _status) hashes
+
+        [l'', _dstPath] = T.split (=='\t') l'
+        (colons, l') = T.span (==':') l
+        nParents = T.length colons
 
 gitDiffTreePatch :: FilePath -> GitRef -> Text -> Sh Text
 gitDiffTreePatch d ref fname = runGit d "diff-tree" ["--root", "--cc", "-r", ref, "--", fname]

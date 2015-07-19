@@ -24,6 +24,12 @@ hasSuffix fn = any (`T.isSuffixOf` fn) suffixes
   where
     suffixes = T.words ".hs .hsc .lhs .cabal .c .h .lhs-boot .hs-boot .x .y"
 
+-- | Is a change one which we should lint?
+interestingDelta :: ChangedFile -> Bool
+interestingDelta (ChangedFile {dstType = GitTypeRegFile, dstPath = fname})
+  | hasSuffix fname = True
+interestingDelta _ = False
+
 main :: IO ()
 main = do
     dir0:refs <- getArgs >>= \case
@@ -35,17 +41,15 @@ main = do
     stats <- shelly $ forM (map T.pack refs) $ \ref -> do
       (cid,deltas) <- gitDiffTree dir ref
 
-      lintMsgs0 <- forM deltas $ \(origs, (gt, blobId), fname) -> if (gt == GitTypeRegFile && hasSuffix fname)
-        then do
-          let blobIds0 = [ b0 | (GitTypeRegFile, b0, _) <- origs, b0 /= z40 ]
-          blob1  <- gitCatBlob dir blobId
+      lintMsgs0 <- forM (filter interestingDelta deltas) $ \cf -> do
+          let blobIds0 = [ b0 | CommitParent GitTypeRegFile _ b0 <- parents cf, b0 /= z40 ]
+          blob1  <- gitCatBlob dir (dstHash cf)
           blobs0 <- mapM (gitCatBlob dir) blobIds0
 
           -- blobs0 will be empty in case in case of newly added files as well as renames/copies
           -- blobs0 will contain more than one entry for merge-commits
 
-          return [ (fname, msg) | msg <- lintBlob blobs0 blob1 ]
-        else return []
+          return [ (dstPath cf, msg) | msg <- lintBlob blobs0 blob1 ]
 
       let lintMsgs = concat lintMsgs0
           status = maximum (Nothing : [ Just lvl | (_, LintMsg lvl _ _ _) <- lintMsgs ])

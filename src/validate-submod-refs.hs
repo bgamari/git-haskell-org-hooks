@@ -29,7 +29,9 @@ main = do
     shelly $ forM_ (map T.pack refs) $ \ref -> do
       (cid,deltas) <- gitDiffTree dir ref
 
-      let smDeltas = [ (smPath, smCid) | (_, (GitTypeGitLink, smCid), smPath) <- deltas ]
+      let smDeltas = [ (smPath, smCid) | ChangedFile { dstType = GitTypeGitLink
+                                                     , dstHash = smCid
+                                                     , dstPath = smPath } <- deltas ]
 
       unless (null smDeltas) $ do
           echo $ "Submodule update(s) detected in " <> cid <> ":"
