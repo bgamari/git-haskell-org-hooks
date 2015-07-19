@@ -1,12 +1,9 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Common
-    ( module Common
-    , module Shelly
-    , module Control.DeepSeq
+module Git
+    ( module Git
     , Text
-    , Word
     ) where
 
 import           Control.DeepSeq
@@ -17,7 +14,6 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Data.Word
 import           GHC.IO.Encoding (utf8, setLocaleEncoding, getLocaleEncoding, textEncodingName)
 import           Prelude hiding (FilePath)
 import           Shelly

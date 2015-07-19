@@ -17,7 +17,7 @@ import           Prelude hiding (FilePath)
 import           Shelly
 import           System.Environment
 
-import           Common
+import           Git
 
 hasSuffix :: Text -> Bool
 hasSuffix fn = any (`T.isSuffixOf` fn) suffixes

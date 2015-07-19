@@ -16,7 +16,7 @@ import           Prelude hiding (FilePath)
 import           Shelly
 import           System.Environment
 
-import           Common
+import           Git
 
 main :: IO ()
 main = do
