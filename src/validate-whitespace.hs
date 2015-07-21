@@ -46,7 +46,7 @@ main = do
           blob1  <- gitCatBlob dir (dstHash cf)
           blobs0 <- mapM (gitCatBlob dir) blobIds0
 
-          -- blobs0 will be empty in case in case of newly added files as well as renames/copies
+          -- blobs0 will be empty in case of newly added files as well as renames/copies
           -- blobs0 will contain more than one entry for merge-commits
 
           return [ (dstPath cf, msg) | msg <- lintBlob blobs0 blob1 ]
